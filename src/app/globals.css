@@ -1,0 +1,252 @@
+@import "tailwindcss";
+@import "tw-animate-css";
+
+@custom-variant dark (&:is(.dark *));
+
+@theme inline {
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --font-sans: var(--font-geist-sans);
+  --font-mono: var(--font-geist-mono);
+  --color-sidebar-ring: var(--sidebar-ring);
+  --color-sidebar-border: var(--sidebar-border);
+  --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
+  --color-sidebar-accent: var(--sidebar-accent);
+  --color-sidebar-primary-foreground: var(--sidebar-primary-foreground);
+  --color-sidebar-primary: var(--sidebar-primary);
+  --color-sidebar-foreground: var(--sidebar-foreground);
+  --color-sidebar: var(--sidebar);
+  --color-chart-5: var(--chart-5);
+  --color-chart-4: var(--chart-4);
+  --color-chart-3: var(--chart-3);
+  --color-chart-2: var(--chart-2);
+  --color-chart-1: var(--chart-1);
+  --color-ring: var(--ring);
+  --color-input: var(--input);
+  --color-border: var(--border);
+  --color-destructive: var(--destructive);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-accent: var(--accent);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-muted: var(--muted);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-secondary: var(--secondary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-primary: var(--primary);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-popover: var(--popover);
+  --color-card-foreground: var(--card-foreground);
+  --color-card: var(--card);
+  --radius-sm: calc(var(--radius) - 4px);
+  --radius-md: calc(var(--radius) - 2px);
+  --radius-lg: var(--radius);
+  --radius-xl: calc(var(--radius) + 4px);
+}
+
+:root {
+  --radius: 0.625rem;
+  /* Default to a dark theme: dark background, light foreground */
+  --background: oklch(0.145 0 0);
+  --foreground: oklch(0.92 0 0);
+  --card: oklch(0.205 0 0);
+  --card-foreground: oklch(0.96 0 0);
+  --popover: oklch(0.205 0 0);
+  --popover-foreground: oklch(0.96 0 0);
+  --primary: oklch(0.922 0 0);
+  --primary-foreground: oklch(0.205 0 0);
+  --secondary: oklch(0.269 0 0);
+  --secondary-foreground: oklch(0.96 0 0);
+  --muted: oklch(0.269 0 0);
+  --muted-foreground: oklch(0.708 0 0);
+  --accent: oklch(0.269 0 0);
+  --accent-foreground: oklch(0.96 0 0);
+  --destructive: oklch(0.704 0.191 22.216);
+  --border: oklch(1 0 0 / 10%);
+  --input: oklch(1 0 0 / 15%);
+  --ring: oklch(0.556 0 0);
+  --chart-1: oklch(0.488 0.243 264.376);
+  --chart-2: oklch(0.696 0.17 162.48);
+  --chart-3: oklch(0.769 0.188 70.08);
+  --chart-4: oklch(0.627 0.265 303.9);
+  --chart-5: oklch(0.645 0.246 16.439);
+  --sidebar: oklch(0.205 0 0);
+  --sidebar-foreground: oklch(0.96 0 0);
+  --sidebar-primary: oklch(0.488 0.243 264.376);
+  --sidebar-primary-foreground: oklch(0.96 0 0);
+  --sidebar-accent: oklch(0.269 0 0);
+  --sidebar-accent-foreground: oklch(0.96 0 0);
+  --sidebar-border: oklch(1 0 0 / 10%);
+  --sidebar-ring: oklch(0.556 0 0);
+}
+
+.dark {
+  /* Keep dark variant similar for future toggles */
+  --background: oklch(0.145 0 0);
+  --foreground: oklch(0.98 0 0);
+  --card: oklch(0.205 0 0);
+  --card-foreground: oklch(0.98 0 0);
+  --popover: oklch(0.205 0 0);
+  --popover-foreground: oklch(0.98 0 0);
+  --primary: oklch(0.922 0 0);
+  --primary-foreground: oklch(0.205 0 0);
+  --secondary: oklch(0.269 0 0);
+  --secondary-foreground: oklch(0.98 0 0);
+  --muted: oklch(0.269 0 0);
+  --muted-foreground: oklch(0.708 0 0);
+  --accent: oklch(0.269 0 0);
+  --accent-foreground: oklch(0.98 0 0);
+  --destructive: oklch(0.704 0.191 22.216);
+  --border: oklch(1 0 0 / 10%);
+  --input: oklch(1 0 0 / 15%);
+  --ring: oklch(0.556 0 0);
+  --chart-1: oklch(0.488 0.243 264.376);
+  --chart-2: oklch(0.696 0.17 162.48);
+  --chart-3: oklch(0.769 0.188 70.08);
+  --chart-4: oklch(0.627 0.265 303.9);
+  --chart-5: oklch(0.645 0.246 16.439);
+  --sidebar: oklch(0.205 0 0);
+  --sidebar-foreground: oklch(0.98 0 0);
+  --sidebar-primary: oklch(0.488 0.243 264.376);
+  --sidebar-primary-foreground: oklch(0.98 0 0);
+  --sidebar-accent: oklch(0.269 0 0);
+  --sidebar-accent-foreground: oklch(0.98 0 0);
+  --sidebar-border: oklch(1 0 0 / 10%);
+  --sidebar-ring: oklch(0.556 0 0);
+}
+
+@layer base {
+  * {
+    @apply border-border outline-ring/50;
+  }
+  html, body {
+    min-height: 100%;
+  }
+  html {
+    background-color: #000000;
+  }
+  body {
+    @apply text-foreground;
+    /* Draw semi-transparent gradients over the background image. Image is last layer. */
+    background-image:
+      radial-gradient(circle at 20% 30%, rgba(255,38,38,0.24), transparent 36%),
+      radial-gradient(circle at 75% 20%, rgba(200,10,60,0.18), transparent 32%),
+      radial-gradient(circle at 45% 80%, rgba(180,30,50,0.16), transparent 38%),
+      radial-gradient(circle at 15% 75%, rgba(0,0,0,0.32), transparent 42%),
+      radial-gradient(circle at 85% 60%, rgba(0,0,0,0.28), transparent 40%),
+      radial-gradient(circle at 50% 50%, rgba(0,0,0,0.25), transparent 45%),
+      radial-gradient(circle at 10% 10%, rgba(0,0,0,0.2), transparent 35%),
+      radial-gradient(circle at 60% 30%, rgba(0,0,0,0.26), transparent 38%),
+      radial-gradient(circle at 30% 60%, rgba(0,0,0,0.2), transparent 36%),
+      linear-gradient(
+        135deg,
+        rgba(9,7,8,0.92) 0%,
+        rgba(18,7,12,0.88) 40%,
+        rgba(23,6,13,0.84) 60%,
+        rgba(6,5,7,0.92) 100%
+      ),
+      url("/media/background.jpeg");
+    background-repeat: no-repeat;
+    background-position: center;
+    background-size: cover;
+    animation: bg-shift 24s ease-in-out infinite alternate;
+    background-color: rgba(0, 0, 0, 0.45);
+    backdrop-filter: blur(1px) saturate(1.05);
+  }
+
+  body::before,
+  body::after {
+    content: "";
+    position: fixed;
+    inset: 0;
+    pointer-events: none;
+    z-index: 0;
+  }
+
+  /* Slow drifting nebula overlay */
+  body::before {
+    background: radial-gradient(circle at 25% 30%, rgba(255, 66, 66, 0.22), transparent 40%),
+      radial-gradient(circle at 70% 25%, rgba(255, 100, 140, 0.16), transparent 38%),
+      radial-gradient(circle at 30% 75%, rgba(80, 15, 35, 0.2), transparent 45%);
+    mix-blend-mode: screen;
+    animation: bg-drift-1 24s ease-in-out infinite alternate;
+    opacity: 0.6;
+  }
+
+  /* Thin moving grid overlay */
+  body::after {
+    background-image:
+      linear-gradient(rgba(255, 255, 255, 0.05) 1px, transparent 1px),
+      linear-gradient(90deg, rgba(255, 255, 255, 0.05) 1px, transparent 1px);
+    background-size: 220px 220px, 220px 220px;
+    background-position: 0 0, 0 0;
+    mix-blend-mode: overlay;
+    opacity: 0.12;
+    animation: grid-pan 38s linear infinite;
+  }
+}
+
+@layer utilities {
+  .ww-space-bg {
+    min-height: 100vh;
+    overflow: hidden;
+    position: relative;
+    background-color: #000000; /* pure black space */
+  }
+  .animate-system-scan {
+    animation: system-scan 7s ease-in-out infinite;
+  }
+  .animate-system-glow {
+    animation: system-glow 9s ease-in-out infinite;
+  }
+}
+
+@keyframes system-scan {
+  0% {
+    transform: translateX(-120%);
+  }
+  100% {
+    transform: translateX(120%);
+  }
+}
+
+@keyframes system-glow {
+  0%, 100% {
+    opacity: 0.25;
+  }
+  50% {
+    opacity: 0.55;
+  }
+}
+
+@keyframes bg-shift {
+  0% {
+    background-position: 0% 0%;
+  }
+  50% {
+    background-position: 50% 50%;
+  }
+  100% {
+    background-position: 100% 100%;
+  }
+}
+
+@keyframes bg-drift-1 {
+  0% {
+    transform: translate3d(-3%, -2%, 0) scale(1.02);
+  }
+  50% {
+    transform: translate3d(2%, 3%, 0) scale(1.04);
+  }
+  100% {
+    transform: translate3d(4%, -1%, 0) scale(1.05);
+  }
+}
+
+@keyframes grid-pan {
+  0% {
+    background-position: 0px 0px, 0px 0px;
+  }
+  100% {
+    background-position: 220px 220px, 220px 220px;
+  }
+}

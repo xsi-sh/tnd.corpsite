@@ -1,0 +1,39 @@
+Here’s how we can fold the Tycoon and OSINT APIs deeper into the app while staying within our rate-limit posture:
+
+Market surfaces (Tycoon)
+
+Price Check:
+Use Tycoon orders + history as the primary source (with internal API as first try if you prefer), so we get depth and historical context. Show best buy/sell + spread + 7/30-day mini sparkline using getTycoonMarketHistory.
+Add region selector that maps to Tycoon regions; keep abortable fetch and short delay if we hit 429.
+
+Market Browser:
+Swap the order book to Tycoon orders so location metadata (structures/stations) is richer. Use Tycoon stats for headline pricing and history for the chart.
+Add market group/type tree using Tycoon /groups and /groups/{id}/types for browsing instead of search-only.
+Keep the throttle banner and abort controller we added; reuse the backoff client for all Tycoon calls.
+
+Player Lookup:
+Enrich the risk panel with zKill stats: top ships, danger/gang ratio, solo %, isk destroyed/lost, recent killmail summary (latest 5).
+Add corp history timeline from ESI and EveWho to highlight recent jumps.
+Keep throttle banner/abort handling; use the backoff helper for zKill and EveWho.
+
+Corp Lookup:
+Pull EveWho corp member list + alliance corp list to show size/roster context and recent member delta.
+Add corp kill stats (zKill) for kills/losses, isk, and top ships.
+Keep throttle/abort logic; add banners if zKill/EveWho 429s occur.
+
+Local Check:
+Use OSINT zKill stats per character to refine risk scoring; flag pilots with high isk destroyed, high danger ratio, or recent killmails.
+Cache per-name OSINT lookup (5–10 min) to avoid repeat hits.
+
+Route Planner:
+Use zKill/EveWho corp/alliance activity on systems to weight hop risk (e.g., recent kills by entities on route).
+Cache per-(origin,dest,mode) plan (we already do) and add short-term cache for per-system inline intel lookups.
+
+System Lookup:
+Add zKill activity summary (recent kills/losses, isk) and EveWho neighbor corp/alliance presence as context.
+Throttle banner already present; use backoff helper on these new calls.
+
+Shared infra:
+Use the new backoffFetchJson + Tycoon client for any new external calls.
+Consider a small shared OSINT client module for EveWho/zKill/ESI with typed responses and backoff caching.
+If you want lint clean runs, either exclude EVETYCOON/** and OSINT/** from lint or tighten types in those test files.
