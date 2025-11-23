@@ -12,11 +12,13 @@ const REFILL_AMOUNT = 1;
 const MAX_BUCKETS = 300;
 
 function getIp(request: NextRequest) {
-  return (
-    request.ip ||
-    request.headers.get("x-forwarded-for")?.split(",")[0]?.trim() ||
-    "unknown"
-  );
+  const forwardedFor = request.headers.get("x-forwarded-for");
+  const realIp =
+    forwardedFor?.split(",")[0]?.trim() ||
+    request.headers.get("x-real-ip") ||
+    request.headers.get("cf-connecting-ip") ||
+    "unknown";
+  return realIp;
 }
 
 function evictOldest() {
