@@ -1,15 +1,12 @@
-import { HeroCard } from "@/components/magic/HeroCard";
-import { cacheLife } from "next/cache";
+import { Suspense } from "react"
+import { Dashboard } from "@/components/Dashboard"
 
-export default async function Home() {
-  "use cache";
-  cacheLife("max");
-
+export default function Home() {
   return (
-    <main className="flex min-h-[calc(100vh-3.5rem)] items-center justify-center px-4 py-10 sm:px-6 sm:py-14">
-      <div className="mx-auto w-full max-w-6xl">
-        <HeroCard />
-      </div>
-    </main>
-  );
+    <div className="min-h-screen bg-zinc-950 p-8 text-zinc-100 font-mono">
+      <Suspense fallback={<div className="text-cyan-500 animate-pulse">INITIALIZING TERMINAL...</div>}>
+        <Dashboard />
+      </Suspense>
+    </div>
+  )
 }

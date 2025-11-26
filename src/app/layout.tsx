@@ -27,9 +27,11 @@ const NAV_ITEMS = [
   { href: "/player-lookup", label: "Player Lookup" },
   { href: "/corp-lookup", label: "Corp Lookup" },
   { href: "/local-check", label: "Local Check" },
-  { href: "/market", label: "Asset Analysis" },
+  { href: "/assets", label: "Asset Analysis" },
+  { href: "/market", label: "Market Analysis" },
   { href: "/market-browser", label: "Market Browser" },
   { href: "/price-check", label: "Price Check" },
+  { href: "/price-comparison", label: "Price Comparison" },
   { href: "/safe-to-warp", label: "Safe to Warp" },
   { href: "/about", label: "About" },
 ];
@@ -40,7 +42,7 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="en">
+    <html lang="en" className="dark">
       <body
         className={`${geistSans.variable} ${geistMono.variable} antialiased`}
       >

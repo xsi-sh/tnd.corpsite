@@ -1,5 +1,5 @@
 export const metadata = {
-  title: "Asset Analysis | Tactical Narcotics Division",
+  title: "Market Analysis | Tactical Narcotics Division",
   description: "Analyze EVE markets and assets with rich price, depth, and history tools.",
 };
 

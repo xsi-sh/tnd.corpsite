@@ -30,6 +30,7 @@ export type MarketTypeMeta = {
   volume?: number | null;
   published?: boolean | null;
   image?: string | null;
+  description?: string | null;
 };
 
 export type MarketLookupResponse =

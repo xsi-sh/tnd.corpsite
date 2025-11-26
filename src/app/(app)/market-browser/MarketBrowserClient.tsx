@@ -1,9 +1,8 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import { ArrowDownCircle, ArrowUpCircle, Loader2, LineChart, MapPin, SortAsc, SortDesc, Info } from "lucide-react";
-import type { MarketLookupResponse } from "@/lib/types/market";
-import { getTycoonMarketHistory, getTycoonMarketOrders, getTycoonMarketStats } from "@/lib/clients/tycoon";
+import { ArrowDownCircle, ArrowUpCircle, Loader2, MapPin, SortAsc, SortDesc, Info } from "lucide-react";
+import type { MarketLookupResponse, MarketTypeMeta } from "@/lib/types/market";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import {
@@ -27,11 +26,11 @@ type MarketOrder = {
 };
 
 type HistoryPoint = {
-	date: string;
-	average: number;
-	highest?: number | null;
-	lowest?: number | null;
-	volume?: number | null;
+  date: string;
+  average: number;
+  highest?: number | null;
+  lowest?: number | null;
+  volume?: number | null;
 };
 
 const HUBS = [
@@ -71,9 +70,13 @@ export function MarketBrowserClient() {
   const [selected, setSelected] = useState<ItemSuggestion | null>(null);
   const [regionAll, setRegionAll] = useState(true);
   const [regionId, setRegionId] = useState<number>(HUBS[0]?.id ?? 10000002);
+
+  // Data States
   const [sellOrders, setSellOrders] = useState<MarketOrder[]>([]);
   const [buyOrders, setBuyOrders] = useState<MarketOrder[]>([]);
   const [history, setHistory] = useState<HistoryPoint[]>([]);
+  const [itemMeta, setItemMeta] = useState<MarketTypeMeta | null>(null);
+
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [buySort, setBuySort] = useState<{ key: "price" | "volume" | "location"; dir: "asc" | "desc" }>({
@@ -85,10 +88,7 @@ export function MarketBrowserClient() {
     dir: "asc",
   });
   const [showDisclaimer, setShowDisclaimer] = useState(false);
-  const [throttleNotice, setThrottleNotice] = useState<string | null>(null);
   const [abortController, setAbortController] = useState<AbortController | null>(null);
-  const [tycoonBestBuy, setTycoonBestBuy] = useState<number | null>(null);
-  const [tycoonBestSell, setTycoonBestSell] = useState<number | null>(null);
 
   useEffect(() => {
     const t = setTimeout(() => {
@@ -108,192 +108,56 @@ export function MarketBrowserClient() {
     setSellOrders([]);
     setBuyOrders([]);
     setHistory([]);
-    setTycoonBestBuy(null);
-    setTycoonBestSell(null);
-    let throttled = false;
+    setItemMeta(null);
+
     try {
       const regions = regionAll ? HUBS.map((h) => h.id) : [regionId];
-      const primaryRegion = regions[0] ?? HUBS[0].id;
-      let historyLoaded = false;
 
-      const loadInternalHistory = async () => {
-        const res = await fetch("/api/market", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          signal: controller.signal,
-          body: JSON.stringify({ typeId: item.id, regions }),
-        });
-        const json = (await res.json()) as MarketLookupResponse;
-        if (!res.ok || !json.ok) {
-          throw new Error(!json.ok ? json.error.message : "Market history lookup failed.");
-        }
-        setHistory(json.data.history);
-      };
+      const res = await fetch("/api/market", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        signal: controller.signal,
+        body: JSON.stringify({ typeId: item.id, regions }),
+      });
 
-      const fallbackToInternal = async () => {
-        const res = await fetch("/api/market", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          signal: controller.signal,
-          body: JSON.stringify({ typeId: item.id, regions }),
-        });
-        const json = (await res.json()) as MarketLookupResponse;
-        if (res.status === 429) {
-          throttled = true;
-          setThrottleNotice("Throttled by market API. Please wait a moment…");
-          setError("Rate limited. Please retry shortly.");
-          return false;
-        }
-        if (!res.ok || !json.ok) {
-          throw new Error(!json.ok ? json.error.message : "Market lookup failed.");
-        }
-        setSellOrders(
-          json.data.sellOrders.map((o) => ({
-            order_id: o.orderId,
-            price: o.price,
-            volume_remain: o.volumeRemain,
-            volume_total: o.volumeTotal,
-            region_id: o.regionId,
-            locationName: o.locationName ?? "Location",
-          })),
-        );
-        setBuyOrders(
-          json.data.buyOrders.map((o) => ({
-            order_id: o.orderId,
-            price: o.price,
-            volume_remain: o.volumeRemain,
-            volume_total: o.volumeTotal,
-            region_id: o.regionId,
-            locationName: o.locationName ?? "Location",
-          })),
-        );
-        if (json.data.history?.length) {
-          setHistory(json.data.history);
-          historyLoaded = true;
-        }
-        return true;
-      };
+      const json = (await res.json()) as MarketLookupResponse;
 
-      try {
-        const tyOrders = await getTycoonMarketOrders(item.id, [primaryRegion], controller.signal);
-        const stationNames = tyOrders.stationNames ?? {};
-        const structureNames = tyOrders.structureNames ?? {};
-        const orders = tyOrders.orders ?? [];
-        const nameFor = (id?: number | null) => {
-          if (!id) return "Location";
-          return stationNames[id] ?? structureNames[id] ?? "Location";
-        };
-
-        const sells = orders
-          .filter((o) => !o.isBuyOrder)
-          .sort((a, b) => a.price - b.price)
-          .map((o) => ({
-            order_id: o.orderId,
-            price: o.price,
-            volume_remain: o.volumeRemain,
-            volume_total: o.volumeTotal,
-            region_id: o.regionId,
-            locationName: nameFor(o.locationId),
-          }));
-        const buys = orders
-          .filter((o) => o.isBuyOrder)
-          .sort((a, b) => b.price - a.price)
-          .map((o) => ({
-            order_id: o.orderId,
-            price: o.price,
-            volume_remain: o.volumeRemain,
-            volume_total: o.volumeTotal,
-            region_id: o.regionId,
-            locationName: nameFor(o.locationId),
-          }));
-
-        if (orders.length === 0) {
-          setThrottleNotice("Tycoon returned no orders; loading internal data…");
-          const ok = await fallbackToInternal();
-          if (!ok) return;
-        } else {
-          setSellOrders(sells);
-          setBuyOrders(buys);
-        }
-      } catch (err) {
-        if (err instanceof DOMException && err.name === "AbortError") throw err;
-        const msg = String(err);
-        if (msg.includes("429")) {
-          throttled = true;
-          setThrottleNotice("Throttled by Tycoon market API. Falling back to internal orders…");
-        } else {
-          setThrottleNotice("Tycoon market unavailable. Falling back to internal orders…");
-        }
-        const ok = await fallbackToInternal();
-        if (!ok) return;
+      if (!res.ok || !json.ok) {
+        throw new Error(!json.ok ? json.error.message : "Market lookup failed.");
       }
 
-      try {
-        const stats = await getTycoonMarketStats(primaryRegion, item.id, controller.signal);
-        const buy = stats.stats?.buy ?? null;
-        const sell = stats.stats?.sell ?? null;
-        if (buy !== null) setTycoonBestBuy(buy);
-        if (sell !== null) setTycoonBestSell(sell);
-      } catch (err) {
-        if (!(err instanceof DOMException && err.name === "AbortError")) {
-          console.warn("Tycoon stats failed", err);
-        } else {
-          throw err;
-        }
-      }
+      setSellOrders(
+        json.data.sellOrders.map((o) => ({
+          order_id: o.orderId,
+          price: o.price,
+          volume_remain: o.volumeRemain,
+          volume_total: o.volumeTotal,
+          region_id: o.regionId,
+          locationName: o.locationName ?? "Location",
+        }))
+      );
 
-      try {
-        const tyHistory = await getTycoonMarketHistory(primaryRegion, item.id, controller.signal);
-        const mapped = tyHistory.history.map((h) => ({
-          date: h.date,
-          average: h.average,
-          highest: h.highest ?? null,
-          lowest: h.lowest ?? null,
-          volume: h.volume ?? null,
-        }));
-        setHistory(mapped);
-        if (mapped.length > 0) historyLoaded = true;
-        if (mapped.length === 0) {
-          await loadInternalHistory();
-          historyLoaded = true;
-        }
-      } catch (err) {
-        if (!(err instanceof DOMException && err.name === "AbortError")) {
-          console.warn("Tycoon history failed", err);
-          try {
-            await loadInternalHistory();
-            historyLoaded = true;
-          } catch (e) {
-            console.warn("Internal history fallback failed", e);
-          }
-        } else {
-          throw err;
-        }
-      }
+      setBuyOrders(
+        json.data.buyOrders.map((o) => ({
+          order_id: o.orderId,
+          price: o.price,
+          volume_remain: o.volumeRemain,
+          volume_total: o.volumeTotal,
+          region_id: o.regionId,
+          locationName: o.locationName ?? "Location",
+        }))
+      );
 
-      if (!historyLoaded) {
-        try {
-          await loadInternalHistory();
-        } catch (err) {
-          console.warn("Final history fallback failed", err);
-        }
-      }
+      setHistory(json.data.history);
+      setItemMeta(json.data.typeMeta);
     } catch (err) {
       if (err instanceof DOMException && err.name === "AbortError") {
         return;
       }
       console.error(err);
-      setError("Failed to load market data.");
-      setSellOrders([]);
-      setBuyOrders([]);
-      setHistory([]);
-      setTycoonBestBuy(null);
-      setTycoonBestSell(null);
+      setError("Failed to load market data. The ESI API might be unavailable.");
     } finally {
       setLoading(false);
-      if (!throttled) {
-        setThrottleNotice(null);
-      }
     }
   }
 
@@ -328,12 +192,12 @@ export function MarketBrowserClient() {
   const summary = useMemo(() => {
     const sellVol = sellOrders.reduce((a, b) => a + (b.volume_remain ?? 0), 0);
     const buyVol = buyOrders.reduce((a, b) => a + (b.volume_remain ?? 0), 0);
-    const headlineSell = tycoonBestSell ?? bestSell?.price ?? null;
-    const headlineBuy = tycoonBestBuy ?? bestBuy?.price ?? null;
+    const headlineSell = bestSell?.price ?? null;
+    const headlineBuy = bestBuy?.price ?? null;
     const spread =
       headlineSell && headlineBuy ? ((headlineSell - headlineBuy) / headlineSell) * 100 : null;
     return { sellVol, buyVol, spread };
-  }, [sellOrders, buyOrders, bestSell, bestBuy, tycoonBestBuy, tycoonBestSell]);
+  }, [sellOrders, buyOrders, bestSell, bestBuy]);
 
   const chartHeight = 100;
   const chartExtra = 12;
@@ -344,20 +208,13 @@ export function MarketBrowserClient() {
         avgLine: "",
         ma7Line: "",
         ma30Line: "",
-        ma90Line: "",
+        ma60Line: "",
         smoothPath: "",
         smoothFillPath: "",
         bars: [] as { x: number; height: number; width: number; opacity: number }[],
         points: [] as { x: number; y: number; price: number; date: string; volume: number | null }[],
         maxVol: 0,
-        stats: null as null | {
-          last: number;
-          min: number;
-          max: number;
-          ma60: number | null;
-          vol7: number | null;
-          vol30: number | null;
-        },
+        stats: null,
       };
     }
 
@@ -394,7 +251,8 @@ export function MarketBrowserClient() {
         const cp1y = p1.y + (p2.y - p0.y) * s;
         const cp2x = p2.x - (p3.x - p1.x) * s;
         const cp2y = p2.y - (p3.y - p1.y) * s;
-        d.push(`C ${cp1x},${cp1y} ${cp2x},${cp2y} ${p2.x},${p2.y}`);
+        const dVal = `C ${cp1x},${cp1y} ${cp2x},${cp2y} ${p2.x},${p2.y}`;
+        if (!dVal.includes("NaN")) d.push(dVal);
       }
       return d.join(" ");
     };
@@ -472,10 +330,10 @@ export function MarketBrowserClient() {
 
   return (
     <section className="space-y-4">
-      {throttleNotice && (
-        <Alert variant="destructive" className="border-amber-500/60 bg-amber-500/10 text-amber-100">
-          <AlertTitle>Throttled</AlertTitle>
-          <AlertDescription>{throttleNotice}</AlertDescription>
+      {error && (
+        <Alert variant="destructive">
+          <AlertTitle>Lookup failed</AlertTitle>
+          <AlertDescription>{error}</AlertDescription>
         </Alert>
       )}
       <div>
@@ -483,8 +341,7 @@ export function MarketBrowserClient() {
           Market Browser
         </h1>
         <p className="mt-2 text-sm text-zinc-400 max-w-prose">
-          Explore live market orders and price history across the major trade hubs,
-          in a layout inspired by the classic market terminal.
+          Explore live market orders and price history across the major trade hubs.
         </p>
       </div>
 
@@ -492,8 +349,8 @@ export function MarketBrowserClient() {
         <div className="space-y-4">
           <Card className="border border-zinc-800/70 bg-black/70 backdrop-blur-sm">
             <CardHeader>
-              <CardTitle>Market Browser</CardTitle>
-              <CardDescription>Classic layout inspired by the legacy market terminal.</CardDescription>
+              <CardTitle>Search</CardTitle>
+              <CardDescription>Find items to view market data.</CardDescription>
             </CardHeader>
             <CardContent className="space-y-3">
               <Input
@@ -554,12 +411,6 @@ export function MarketBrowserClient() {
                   {loading ? <Loader2 className="h-4 w-4 animate-spin" /> : "Load"}
                 </Button>
               </div>
-              {error && (
-                <Alert variant="destructive">
-                  <AlertTitle>Lookup failed</AlertTitle>
-                  <AlertDescription>{error}</AlertDescription>
-                </Alert>
-              )}
             </CardContent>
           </Card>
 
@@ -597,18 +448,47 @@ export function MarketBrowserClient() {
               </div>
             </CardContent>
           </Card>
+
+          {itemMeta && (
+            <Card className="border border-zinc-800/70 bg-black/70 backdrop-blur-sm">
+              <CardHeader>
+                <CardTitle>Item Details</CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-4 text-sm">
+                {itemMeta.description && (
+                  <div className="text-zinc-400 text-xs leading-relaxed max-h-40 overflow-y-auto pr-2">
+                    <div dangerouslySetInnerHTML={{ __html: itemMeta.description }} />
+                  </div>
+                )}
+                <div className="grid grid-cols-2 gap-2 text-xs text-zinc-500 border-t border-zinc-800 pt-4">
+                  <div className="flex flex-col">
+                    <span className="text-zinc-600 uppercase tracking-wider font-bold text-[0.65rem]">Group</span>
+                    <span className="text-zinc-300">{itemMeta.group}</span>
+                  </div>
+                  <div className="flex flex-col text-right">
+                    <span className="text-zinc-600 uppercase tracking-wider font-bold text-[0.65rem]">Volume</span>
+                    <span className="text-zinc-300">{formatNumber(itemMeta.volume ?? null, 2)} m³</span>
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+          )}
         </div>
 
-        <Card className="border border-zinc-800/70 bg-black/70 backdrop-blur-sm">
+        <Card className="border border-zinc-800/70 bg-black/70 backdrop-blur-sm h-fit">
           <CardHeader className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
-            <div>
-              <CardTitle className="flex items-center gap-2">
-                <LineChart className="h-4 w-4 text-emerald-300" />
-                {selected ? selected.name : "Select an item"}
-              </CardTitle>
-              <CardDescription>
-                {regionAll ? "All hubs aggregated" : HUBS.find((h) => h.id === regionId)?.name ?? "Region"}
-              </CardDescription>
+            <div className="flex items-start gap-4">
+              {itemMeta?.image && (
+                <img src={itemMeta.image} alt="" className="h-12 w-12 rounded border border-zinc-800 bg-zinc-900" />
+              )}
+              <div>
+                <CardTitle className="flex items-center gap-2">
+                  {selected ? selected.name : "Select an item"}
+                </CardTitle>
+                <CardDescription>
+                  {regionAll ? "All hubs aggregated" : HUBS.find((h) => h.id === regionId)?.name ?? "Region"}
+                </CardDescription>
+              </div>
             </div>
             <button
               type="button"
@@ -627,93 +507,93 @@ export function MarketBrowserClient() {
               CCP&apos;s third-party policy, but is not endorsed by or affiliated with CCP hf.
             </div>
           )}
-        <CardContent>
-          <Tabs defaultValue="buys" className="space-y-4">
-            <TabsList className="bg-zinc-900/70">
-              <TabsTrigger value="buys">Buy Orders</TabsTrigger>
-              <TabsTrigger value="sells">Sell Orders</TabsTrigger>
-              <TabsTrigger value="history">History</TabsTrigger>
-            </TabsList>
+          <CardContent>
+            <Tabs defaultValue="buys" className="space-y-4">
+              <TabsList className="bg-zinc-900/70">
+                <TabsTrigger value="buys">Buy Orders</TabsTrigger>
+                <TabsTrigger value="sells">Sell Orders</TabsTrigger>
+                <TabsTrigger value="history">History</TabsTrigger>
+              </TabsList>
 
-            <TabsContent value="buys">
-              <div className="overflow-auto rounded-md border border-zinc-800/80">
-                <table className="min-w-full text-left text-sm">
-                  <thead className="bg-zinc-900/60 text-zinc-400">
-                    <tr>
-                      <th className="px-3 py-2">
-                        <button
-                          type="button"
-                          className="inline-flex items-center gap-1"
-                          onClick={() =>
-                            setBuySort((prev) =>
-                              prev.key === "price"
-                                ? { ...prev, dir: prev.dir === "asc" ? "desc" : "asc" }
-                                : { key: "price", dir: "desc" },
-                            )
-                          }
-                        >
-                          Price {sortIcon(buySort, "price")}
-                        </button>
-                      </th>
-                      <th className="px-3 py-2">
-                        <button
-                          type="button"
-                          className="inline-flex items-center gap-1"
-                          onClick={() =>
-                            setBuySort((prev) =>
-                              prev.key === "volume"
-                                ? { ...prev, dir: prev.dir === "asc" ? "desc" : "asc" }
-                                : { key: "volume", dir: "desc" },
-                            )
-                          }
-                        >
-                          Volume {sortIcon(buySort, "volume")}
-                        </button>
-                      </th>
-                      <th className="px-3 py-2">
-                        <button
-                          type="button"
-                          className="inline-flex items-center gap-1"
-                          onClick={() =>
-                            setBuySort((prev) =>
-                              prev.key === "location"
-                                ? { ...prev, dir: prev.dir === "asc" ? "desc" : "asc" }
-                                : { key: "location", dir: "asc" },
-                            )
-                          }
-                        >
-                          Location {sortIcon(buySort, "location")}
-                        </button>
-                      </th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-zinc-900">
-                    {sortedBuyOrders.map((o) => (
-                      <tr key={o.order_id} className="hover:bg-zinc-900/50">
-                        <td className="px-3 py-2 text-zinc-100">{formatNumber(o.price, 2)} ISK</td>
-                        <td className="px-3 py-2 text-zinc-300">{formatNumber(o.volume_remain, 0)}</td>
-                        <td className="px-3 py-2 text-zinc-400">
-                          <MapPin className="mr-1 inline h-3 w-3 text-emerald-300" />
-                          {o.locationName ?? "Location"}
-                        </td>
-                      </tr>
-                    ))}
-                    {buyOrders.length === 0 && (
+              <TabsContent value="buys">
+                <div className="overflow-auto rounded-md border border-zinc-800/80 max-h-[800px]">
+                  <table className="min-w-full text-left text-sm">
+                    <thead className="bg-zinc-900/60 text-zinc-400 sticky top-0 z-10 backdrop-blur-md">
                       <tr>
-                        <td className="px-3 py-2 text-zinc-500" colSpan={3}>
-                          No buy orders found.
-                        </td>
+                        <th className="px-3 py-2">
+                          <button
+                            type="button"
+                            className="inline-flex items-center gap-1"
+                            onClick={() =>
+                              setBuySort((prev) =>
+                                prev.key === "price"
+                                  ? { ...prev, dir: prev.dir === "asc" ? "desc" : "asc" }
+                                  : { key: "price", dir: "desc" },
+                              )
+                            }
+                          >
+                            Price {sortIcon(buySort, "price")}
+                          </button>
+                        </th>
+                        <th className="px-3 py-2">
+                          <button
+                            type="button"
+                            className="inline-flex items-center gap-1"
+                            onClick={() =>
+                              setBuySort((prev) =>
+                                prev.key === "volume"
+                                  ? { ...prev, dir: prev.dir === "asc" ? "desc" : "asc" }
+                                  : { key: "volume", dir: "desc" },
+                              )
+                            }
+                          >
+                            Volume {sortIcon(buySort, "volume")}
+                          </button>
+                        </th>
+                        <th className="px-3 py-2">
+                          <button
+                            type="button"
+                            className="inline-flex items-center gap-1"
+                            onClick={() =>
+                              setBuySort((prev) =>
+                                prev.key === "location"
+                                  ? { ...prev, dir: prev.dir === "asc" ? "desc" : "asc" }
+                                  : { key: "location", dir: "asc" },
+                              )
+                            }
+                          >
+                            Location {sortIcon(buySort, "location")}
+                          </button>
+                        </th>
                       </tr>
-                    )}
-                  </tbody>
-                </table>
-              </div>
-            </TabsContent>
+                    </thead>
+                    <tbody className="divide-y divide-zinc-900">
+                      {sortedBuyOrders.map((o) => (
+                        <tr key={o.order_id} className="hover:bg-zinc-900/50">
+                          <td className="px-3 py-2 text-zinc-100">{formatNumber(o.price, 2)} ISK</td>
+                          <td className="px-3 py-2 text-zinc-300">{formatNumber(o.volume_remain, 0)}</td>
+                          <td className="px-3 py-2 text-zinc-400">
+                            <MapPin className="mr-1 inline h-3 w-3 text-emerald-300" />
+                            {o.locationName ?? "Location"}
+                          </td>
+                        </tr>
+                      ))}
+                      {buyOrders.length === 0 && (
+                        <tr>
+                          <td className="px-3 py-2 text-zinc-500" colSpan={3}>
+                            No buy orders found.
+                          </td>
+                        </tr>
+                      )}
+                    </tbody>
+                  </table>
+                </div>
+              </TabsContent>
 
-            <TabsContent value="sells">
-              <div className="overflow-auto rounded-md border border-zinc-800/80">
-                <table className="min-w-full text-left text-sm">
-                  <thead className="bg-zinc-900/60 text-zinc-400">
+              <TabsContent value="sells">
+                <div className="overflow-auto rounded-md border border-zinc-800/80 max-h-[800px]">
+                  <table className="min-w-full text-left text-sm">
+                    <thead className="bg-zinc-900/60 text-zinc-400 sticky top-0 z-10 backdrop-blur-md">
                     <tr>
                       <th className="px-3 py-2">
                         <button
