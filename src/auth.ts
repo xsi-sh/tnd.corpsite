@@ -1,5 +1,6 @@
 import NextAuth from "next-auth"
 import EveOnline from "next-auth/providers/eveonline"
+import Credentials from "next-auth/providers/credentials"
 import { JWT } from "next-auth/jwt"
 
 // Scopes from your requirements
@@ -74,9 +75,15 @@ const SCOPES = [
   "esi-characters.read_freelance_jobs.v1"
 ].join(" ")
 
-if (!process.env.EVE_CLIENT_ID) throw new Error("Missing EVE_CLIENT_ID")
-if (!process.env.EVE_CLIENT_SECRET) throw new Error("Missing EVE_CLIENT_SECRET")
-if (!process.env.AUTH_SECRET) throw new Error("Missing AUTH_SECRET")
+const MOCK_MODE = process.env.NEXT_PUBLIC_MOCK_MODE === 'true'
+
+if (!MOCK_MODE) {
+  if (!process.env.EVE_CLIENT_ID) throw new Error("Missing EVE_CLIENT_ID")
+  if (!process.env.EVE_CLIENT_SECRET) throw new Error("Missing EVE_CLIENT_SECRET")
+  if (!process.env.AUTH_SECRET) throw new Error("Missing AUTH_SECRET")
+} else {
+  console.log("🔧 MOCK MODE ENABLED - Using test credentials")
+}
 
 console.log("Update your EVE Portal configuration to use the new redirect URI: .../callback/eve")
 
@@ -131,11 +138,26 @@ function parseJwt(token: string) {
 
 export const nextAuth = NextAuth({
   providers: [
+    ...(MOCK_MODE ? [
+      Credentials({
+        id: "mock",
+        name: "Mock Mode",
+        credentials: {},
+        async authorize() {
+          return {
+            id: "mock-user",
+            name: "Test Pilot",
+            sub: "CHARACTER:EVE:93686951",
+            owner: "mock-owner-hash",
+          }
+        },
+      }),
+    ] : []),
     EveOnline({
       id: "eve", // Force provider ID to 'eve' -> callback: .../callback/eve
       name: "EVE Online",
-      clientId: process.env.EVE_CLIENT_ID,
-      clientSecret: process.env.EVE_CLIENT_SECRET,
+      clientId: process.env.EVE_CLIENT_ID || "mock",
+      clientSecret: process.env.EVE_CLIENT_SECRET || "mock",
       issuer: "https://login.eveonline.com",
       authorization: {
         url: "https://login.eveonline.com/v2/oauth/authorize",
@@ -149,27 +171,38 @@ export const nextAuth = NextAuth({
   ],
   debug: true, // Enable NextAuth debugging
   callbacks: {
-    async jwt({ token, account, profile }) {
+    async jwt({ token, account, profile, user }) {
+      // Mock mode sign in
+      if (MOCK_MODE && user) {
+        return {
+          accessToken: "mock-access-token",
+          refreshToken: "mock-refresh-token",
+          expiresAt: Math.floor(Date.now() / 1000) + 86400,
+          characterId: "93686951",
+          name: "Test Pilot",
+        } as JWT
+      }
+
       // Initial sign in
       if (account && profile) {
         console.log("Initial Sign In Profile:", JSON.stringify(profile, null, 2))
         return {
           accessToken: account.access_token,
           refreshToken: account.refresh_token,
-          expiresAt: account.expires_at, // EVE sends expires_in, NextAuth usually normalizes or we calc
-          characterId: profile.sub?.split(":").pop(), // EVE sub is "CHARACTER:EVE:123456"
+          expiresAt: account.expires_at,
+          characterId: profile.sub?.split(":").pop(),
           name: profile.name,
           ownerHash: profile.owner as string | undefined,
         } as JWT
       }
 
       // Fallback: If characterId is missing but we have accessToken, extract it
-      if (!token.characterId && token.accessToken) {
+      if (!token.characterId && token.accessToken && !token.accessToken.startsWith("mock")) {
         const payload = parseJwt(token.accessToken)
         if (payload) {
           if (payload.sub) {
             token.characterId = payload.sub.split(":").pop()
-            token.name = payload.name // EVE JWT often has name too
+            token.name = payload.name
             console.log("Recovered Character ID from Access Token:", token.characterId)
           }
           if (payload.scp) {
@@ -184,7 +217,7 @@ export const nextAuth = NextAuth({
       }
 
       // Access token has expired, try to update it
-      return refreshAccessToken(token)
+      return MOCK_MODE ? token : refreshAccessToken(token)
     },
     async session({ session, token }) {
       // Expose the access token and character ID to the client session

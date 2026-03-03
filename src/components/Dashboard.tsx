@@ -6,6 +6,18 @@ import { EsiClient } from "@/lib/esi-sdk/client"
 import { auth } from "@/auth"
 import { redirect } from "next/navigation"
 import { DashboardStats } from "./DashboardStats"
+import {
+  mockCharacterData,
+  mockWallet,
+  mockLocation,
+  mockShip,
+  mockSkills,
+  mockAssets,
+  mockWalletJournal,
+  mockMarketPrices,
+} from "@/lib/mockData"
+
+const MOCK_MODE = process.env.NEXT_PUBLIC_MOCK_MODE === 'true'
 
 export async function Dashboard() {
   const session = await auth()
@@ -18,12 +30,6 @@ export async function Dashboard() {
     return <ForceLogout />
   }
 
-  // Initialize ESI Client
-  const esi = new EsiClient({
-    userAgent: process.env.NEXT_PUBLIC_ESI_USER_AGENT || "Tactical Narcotics Division/1.0.0",
-    token: session.user.accessToken,
-  })
-
   const charId = Number(session.user.characterId)
 
   if (isNaN(charId)) {
@@ -31,28 +37,57 @@ export async function Dashboard() {
     return <div className="text-red-500">Error: Invalid Character ID</div>
   }
 
-  // Parallel fetch with error tolerance
-  const results = await Promise.allSettled([
-    esi.getCharacter({ character_id: charId }),
-    esi.getCharacterWallet({ character_id: charId }),
-    esi.getCharacterLocation({ character_id: charId }),
-    esi.getCharacterShip({ character_id: charId }),
-    esi.getCharacterSkills({ character_id: charId }),
-    esi.getCharacterAssets({ character_id: charId, page: 1 }),
-    esi.getCharacterWalletJournal({ character_id: charId }),
-    esi.getCharacterWalletTransactions({ character_id: charId }),
-    esi.getMarketsPrices()
-  ])
+  // Use mock data or fetch from ESI
+  let publicInfo, wallet, location, ship, skills, assets, journal, transactions, prices
 
-  const publicInfo = results[0].status === 'fulfilled' ? results[0].value.data : { birthday: new Date().toISOString(), corporation_id: 0 }
-  const wallet = results[1].status === 'fulfilled' ? results[1].value.data : 0
-  const location = results[2].status === 'fulfilled' ? results[2].value.data : { solar_system_id: 0, station_id: 0 }
-  const ship = results[3].status === 'fulfilled' ? results[3].value.data : { ship_name: 'Unknown', ship_type_id: 0 }
-  const skills = results[4].status === 'fulfilled' ? results[4].value.data : { total_sp: 0, unallocated_sp: 0 }
-  const assets = results[5].status === 'fulfilled' ? results[5].value.data : []
-  const journal = results[6].status === 'fulfilled' ? results[6].value.data : []
-  const transactions = results[7].status === 'fulfilled' ? results[7].value.data : []
-  const prices = results[8].status === 'fulfilled' ? results[8].value.data : []
+  if (MOCK_MODE) {
+    console.log("📊 Using mock data for dashboard")
+    publicInfo = mockCharacterData
+    wallet = mockWallet
+    location = mockLocation
+    ship = mockShip
+    skills = mockSkills
+    assets = mockAssets
+    journal = mockWalletJournal
+    transactions = []
+    prices = mockMarketPrices
+  } else {
+    // Initialize ESI Client
+    const esi = new EsiClient({
+      userAgent: process.env.NEXT_PUBLIC_ESI_USER_AGENT || "Tactical Narcotics Division/1.0.0",
+      token: session.user.accessToken,
+    })
+
+    // Parallel fetch with error tolerance
+    const results = await Promise.allSettled([
+      esi.getCharacter({ character_id: charId }),
+      esi.getCharacterWallet({ character_id: charId }),
+      esi.getCharacterLocation({ character_id: charId }),
+      esi.getCharacterShip({ character_id: charId }),
+      esi.getCharacterSkills({ character_id: charId }),
+      esi.getCharacterAssets({ character_id: charId, page: 1 }),
+      esi.getCharacterWalletJournal({ character_id: charId }),
+      esi.getCharacterWalletTransactions({ character_id: charId }),
+      esi.getMarketsPrices()
+    ])
+
+    publicInfo = results[0].status === 'fulfilled' ? results[0].value.data : { birthday: new Date().toISOString(), corporation_id: 0 }
+    wallet = results[1].status === 'fulfilled' ? results[1].value.data : 0
+    location = results[2].status === 'fulfilled' ? results[2].value.data : { solar_system_id: 0, station_id: 0 }
+    ship = results[3].status === 'fulfilled' ? results[3].value.data : { ship_name: 'Unknown', ship_type_id: 0 }
+    skills = results[4].status === 'fulfilled' ? results[4].value.data : { total_sp: 0, unallocated_sp: 0 }
+    assets = results[5].status === 'fulfilled' ? results[5].value.data : []
+    journal = results[6].status === 'fulfilled' ? results[6].value.data : []
+    transactions = results[7].status === 'fulfilled' ? results[7].value.data : []
+    prices = results[8].status === 'fulfilled' ? results[8].value.data : []
+
+    // Log errors for debugging
+    results.forEach((res, index) => {
+      if (res.status === 'rejected') {
+        console.error(`ESI Request ${index} failed:`, res.reason)
+      }
+    })
+  }
 
   // Calculations
   const plexCount = assets.filter(a => a.type_id === 44992).reduce((acc, a) => acc + a.quantity, 0)
@@ -72,13 +107,6 @@ export async function Dashboard() {
   const income = recentJournal.filter(j => (j.amount || 0) > 0).reduce((acc, j) => acc + (j.amount || 0), 0)
   const expense = recentJournal.filter(j => (j.amount || 0) < 0).reduce((acc, j) => acc + (j.amount || 0), 0)
   const net = income + expense
-
-  // Log errors for debugging
-  results.forEach((res, index) => {
-    if (res.status === 'rejected') {
-      console.error(`ESI Request ${index} failed:`, res.reason)
-    }
-  })
 
   return (
     <>

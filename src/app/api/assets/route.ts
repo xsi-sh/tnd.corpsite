@@ -1,8 +1,11 @@
 import { NextResponse } from "next/server";
 import { auth } from "@/auth";
 import { EsiClient } from "@/lib/esi-sdk";
+import { mockAssets, mockMarketPrices } from "@/lib/mockData";
 
 export const maxDuration = 60; // Allow longer timeout for fetching all asset pages
+
+const MOCK_MODE = process.env.NEXT_PUBLIC_MOCK_MODE === 'true'
 
 type Asset = {
   type_id: number;
@@ -90,6 +93,37 @@ async function resolveTypeNames(esi: EsiClient, typeIds: number[]): Promise<Map<
 }
 
 export async function GET() {
+  // Mock mode support
+  if (MOCK_MODE) {
+    const priceMap = new Map(mockMarketPrices.map(p => [p.type_id, p.average_price || 0]));
+    
+    const enrichedAssets = mockAssets.map(asset => {
+      const totalValue = (priceMap.get(asset.type_id) || 0) * asset.quantity;
+      return {
+        ...asset,
+        name: `Item ${asset.type_id}`,
+        location_name: 'Jita IV - Moon 4 - Caldari Navy Assembly Plant',
+        value: totalValue,
+      };
+    });
+
+    enrichedAssets.sort((a, b) => (b.value || 0) - (a.value || 0));
+
+    const totalWealth = enrichedAssets.reduce((acc, a) => acc + (a.value || 0), 0);
+    const wealthAssets = totalWealth * 0.8;
+    const wealthSellOrders = totalWealth * 0.15;
+    const wealthEscrow = totalWealth * 0.05;
+
+    return NextResponse.json({
+      assets: enrichedAssets,
+      totalWealth,
+      wealthAssets,
+      wealthSellOrders,
+      wealthEscrow,
+      itemCount: enrichedAssets.length
+    });
+  }
+
   const session = await auth();
   if (!session?.user?.characterId || !session.user.accessToken) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
